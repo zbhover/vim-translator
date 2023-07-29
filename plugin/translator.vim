@@ -86,10 +86,10 @@ function! s:create_popup(words, result)
                 \}
     let l:result = []
     for x in split(a:result, "\n")
-        call add(l:result, substitute(x, '\s', '', 'g'))
+        call add(l:result, substitute(x, '\s', ' ', 'g'))      “此处不让中文转英文的空格过滤掉，下面一行修改是增加显示来源
     endfor
-    if len(a:words) < 132
-        let l:winid = popup_create([a:words, '------------------------------------------------------------------'] + l:result, l:options)
+    if len(a:words) < 132                         
+        let l:winid = popup_create([a:words, '--------------------------------'.g:translator_channel.'----------------------------'] + l:result, l:options)
     else
         let l:winid = popup_create(l:result, l:options)
     endif
