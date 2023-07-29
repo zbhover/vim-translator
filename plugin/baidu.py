@@ -226,7 +226,7 @@ def _get_result(query, is_zh=''):
         else:
             if 'dict_result' in res and fr == 'en':
                 for x in res['dict_result']['simple_means']['symbols']:
-                    if 'ph_en' in x and x['ph_en'] != ‘’:
+                    if 'ph_en' in x and x['ph_en'] != '':
                         result.append('英:['+x['ph_en']+']')
                     if 'ph_am' in x and x['ph_am'] != '':
                         result.append('美:['+x['ph_am']+']')
