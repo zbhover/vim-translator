@@ -89,7 +89,7 @@ function! s:create_popup(words, result)
         call add(l:result, substitute(x, '\s', ' ', 'g'))
     endfor
     if len(a:words) < 132                         
-        let l:winid = popup_create([a:words, '--------------------------------'.g:translator_channel.'----------------------------'] + l:result, l:options)
+        let l:winid = popup_create([a:words, '-------------------'.g:translator_channel.'-----按‘z’关闭弹窗---------'] + l:result, l:options)
     else
         let l:winid = popup_create(l:result, l:options)
     endif
