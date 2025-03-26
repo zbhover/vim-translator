@@ -6,60 +6,22 @@ if !exists('g:translator_outputype')
     if s:has_popup
         let g:translator_outputype = 'popup'
     else
-        let g:translator_outputype = 'echo'
+        let g:translator_outputype = 'echo1'
     endif
 endif
 
 if g:translator_outputype == 'popup' && !s:has_popup
-    echoerr '[Translator] not support popup, `g:translator_outputype` will be changed to `echo`'
-    let g:translator_outputype = 'echo'
+    echoerr '[Translator] not support popup, `g:translator_outputype` will be changed to `echo1`'
+    let g:translator_outputype = 'echo1'
 endif
 
 if !exists('g:translator_channel')
-    let g:translator_channel = 'youdao'
+    let g:translator_channel = 'kd'
 endif
 
-if g:translator_channel != 'youdao' &&  g:translator_channel != 'baidu'
-    echoerr '[Translator] g:translator_channel 配置错误'
+if g:translator_channel == 'baidu'
+    let s:translator_file= s:current_path . '/'.g:translator_channel.'.py'
 endif
-
-let s:translator_file= s:current_path . '/'.g:translator_channel.'.py'
-
-if !exists('g:translator_cache')
-    let g:translator_cache = 1
-endif
-
-if !exists('g:translator_cache_path')
-    let g:translator_cache_path = s:current_path.'/.cache'
-endif
-
-if g:translator_cache
-    if !isdirectory(g:translator_cache_path)
-        call mkdir(g:translator_cache_path)
-    endif
-endif
-
-let s:translator_enshrine_path = s:current_path.'/.enshrine.tdata'
-
-let s:translator_enshrine_comp_algo = ''
-
-if executable('bzip2')
-    let s:translator_enshrine_comp_algo = 'bzip2'
-elseif executable('gzip')
-    let s:translator_enshrine_comp_algo = 'gzip'
-endif
-
-function! s:do_cache(md5, s)
-    let l:ppdir = g:translator_cache_path.'/'.a:md5[:1]
-    if !isdirectory(l:ppdir)
-        call mkdir(l:ppdir)
-    endif
-    let l:pdir = l:ppdir.'/'.a:md5[2:3]
-    if !isdirectory(l:pdir)
-        call mkdir(l:pdir)
-    endif
-    call writefile([a:s], l:pdir.'/'.a:md5)
-endfunction
 
 function! s:popup_filter(winid, key)
     if a:key == 'z'
@@ -88,8 +50,8 @@ function! s:create_popup(words, result)
     for x in split(a:result, "\n")
         call add(l:result, substitute(x, '\s', ' ', 'g'))
     endfor
-    if len(a:words) < 132                         
-        let l:winid = popup_create([a:words, '-------------------'.g:translator_channel.'-----按‘z’关闭弹窗---------'] + l:result, l:options)
+    if len(a:words) < 132
+        let l:winid = popup_create([a:words, '-----------------'.g:translator_channel.'----按`z`关闭弹窗------'] + l:result, l:options)
     else
         let l:winid = popup_create(l:result, l:options)
     endif
@@ -99,70 +61,36 @@ function! TranslateCallback(chan, msg)
     let l:channel_id = matchstr(string(a:chan), '[0-9]\+')
     let l:msg = substitute(a:msg, '\r', '', 'g')
     if has_key(s:channel_map, l:channel_id)
-        if g:translator_outputype == 'echo' || len(l:msg) > 4000
-            call s:do_echo(s:channel_map[l:channel_id]['words'], l:msg, s:channel_map[l:channel_id]['is_echo'])
+        if g:translator_outputype != 'popup'
+            call s:do_echo(s:channel_map[l:channel_id]['words'], l:msg)
         else
             call s:create_popup(s:channel_map[l:channel_id]['words'], l:msg)
         endif
-        if g:translator_cache && !s:channel_map[l:channel_id]['is_zh']
-            call s:do_cache(s:channel_map[l:channel_id]['md5'], l:msg)
-        endif
+
         unlet s:channel_map[l:channel_id]
     endif
 endfunction
 
-function! s:do_enshrine(words, translation)
-    if len(s:translator_enshrine_comp_algo) > 0
-        if filereadable(s:translator_enshrine_path)
-            call system(s:translator_enshrine_comp_algo.' '.s:translator_enshrine_path.' -c -d  > '. s:current_path.'/.tmp.tmp')
-            let l:need_write = 1
-            for x in readfile(s:current_path.'/.tmp.tmp')
-                if match(x, a:words."\u0001") != -1
-                    let l:need_write = 0
-                    break
-                endif
-            endfor
-            if l:need_write
-                call system('echo "'.a:words.'\u0001 '.a:translation.'  ['.g:translator_channel.']\n" >> '.s:current_path.'/.tmp.tmp && '.s:translator_enshrine_comp_algo.' -c  --best '.s:current_path.'/.tmp.tmp  > '.s:translator_enshrine_path.' && rm -rf '.s:current_path.'/.tmp.tmp')
-            else
-                call system('rm -rf '.s:current_path.'/.tmp.tmp')
-            endif
-        else
-            call system('echo "'.a:words.'\u0001 '.a:translation.'  ['.g:translator_channel.']\n" | '.s:translator_enshrine_comp_algo.' -c  --best > '.s:translator_enshrine_path)
-        endif
-    else
-        let l:need_write = 1
-        if filereadable(s:translator_enshrine_path)
-            for x in readfile(s:translator_enshrine_path)
-                if match(x, a:words."\u0001") != -1
-                    let l:need_write = 0
-                    break
-                endif
-            endfor
-        endif
-        if l:need_write
-            call system('echo "'.a:words.'\u0001 '.a:translation.'  ['.g:translator_channel.']\n" >> '.s:translator_enshrine_path)
-        endif
-    endif
-endfunction
 
 let s:channel_map = {}
 
-function! s:do_echo(words, res, is_echo)
-    if a:is_echo
-        let l:tmp = a:words.":\n".substitute(a:res, '\r', '', 'g')
-    else
-        let l:tmp = substitute(a:res, '\r', '', 'g')
-    endif
-    if len(l:tmp) > 200
+function! s:do_echo(words, res)
+    let l:tmp = a:words.":\n".substitute(a:res, '\r', '', 'g')
+    if g:translator_outputype=="echo1"
         silent! execute 'cexpr l:tmp'
         silent! execute 'copen'
+    elseif g:translator_outputype=="echo2"
+        windo if expand("%")=="dict-win" |q!|endif
+        50vsp dict-win
+        setlocal buftype=nofile bufhidden=hide noswapfile
+        1s/^/\=l:tmp/
+        1
     else
         echo substitute(l:tmp, '\n', ' ', 'g')
     endif
 endfunction
 
-function! s:translate(words, is_echo, do_enshrine, is_replace, is_zh)
+function! s:translate(words)
     if !executable('python3')
         echoerr '[Translator] [Err]: python3 is not installed!'
         return
@@ -172,60 +100,27 @@ function! s:translate(words, is_echo, do_enshrine, is_replace, is_zh)
         return
     endif
     let l:base64 = util#base64(a:words)
-    let l:is_echo = a:is_echo
-    if g:translator_outputype == 'popup'
-        let l:is_echo = 0
-    endif
     let l:md5 = ''
-    if g:translator_cache && !a:is_zh
-        let l:md5 = util#md5(l:base64)
-        let l:ppdir = g:translator_cache_path.'/'.l:md5[:1]
-        if isdirectory(l:ppdir)
-            let l:pdir = l:ppdir.'/'.l:md5[2:3]
-            if isdirectory(l:pdir)
-                let l:path = l:pdir.'/'.l:md5
-                if filereadable(l:path)
-                    let l:res = readfile(l:path)[0]
-                    if !a:is_replace
-                        if g:translator_outputype == 'echo' || len(l:res) > 4000
-                            call s:do_echo(a:words, l:res, l:is_echo)
-                        else
-                            call s:create_popup(a:words, l:res)
-                        endif
-                    endif
-                    if a:do_enshrine && len(l:res) > 0 && match(l:res, 'Err:') == -1
-                        call s:do_enshrine(a:words, l:res)
-                        echo a:words.' 收藏成功'
-                    endif
-                    return l:res
-                endif
-            endif
+    if g:translator_channel == "baidu"
+        if IsChinese(a:words)
+            let l:cmd = 'python3 '.s:current_path.'/baidu.py '.l:base64.' zh'
+            "let l:cmd = 'python3 '.s:translator_file.' '.l:base64
+        else
+            let l:cmd = 'python3 '.s:current_path.'/baidu.py '.a:words
         endif
+    elseif g:translator_channel =="kd"
+        let l:cmd = 'kd '.a:words
     endif
-    if a:is_zh
-        let l:cmd = 'python3 '.s:current_path.'/baidu.py '.l:base64.' zh'
-    else
-        let l:cmd = 'python3 '.s:translator_file.' '.l:base64
-    endif
-    if !a:is_replace && !a:do_enshrine && exists('*job_start') && ! has('gui_macvim')
+    if !exists('*job_start') && ! has('gui_macvim')
         let l:job = job_start(l:cmd, {'out_cb': 'TranslateCallback', 'err_cb': 'TranslateCallback', 'mode': 'raw'})
         let l:channel_id = matchstr(string(job_getchannel(l:job)), '[0-9]\+')
-        let s:channel_map[l:channel_id] = {'md5': l:md5, 'words': a:words, 'is_echo': l:is_echo, 'is_zh': a:is_zh}
+        let s:channel_map[l:channel_id] = {'md5': l:md5, 'words': a:words}
     else
         let l:res = substitute(system(l:cmd), '\r', '', 'g')
-        if !a:is_replace
-            if g:translator_outputype == 'echo' || len(l:res) > 4000
-                call s:do_echo(a:words, l:res, l:is_echo)
-            else
-                call s:create_popup(a:words, l:res)
-            endif
-        endif
-        if g:translator_cache && !a:is_zh
-            call s:do_cache(l:md5, l:res)
-        endif
-        if a:do_enshrine && len(l:res) > 0 && match(l:res, 'Err:') ==-1
-            call s:do_enshrine(a:words, l:res)
-            echo a:words.'收藏成功'
+        if g:translator_outputype != 'popup'
+            call s:do_echo(a:words, l:res)
+        else
+            call s:create_popup(a:words, l:res)
         endif
         return l:res
     endif
@@ -233,37 +128,80 @@ endfunction
 
 function! s:input_translate(arg)
     if len(a:arg) > 0
-        call s:translate(a:arg, 1, 0, 0, 0)
+        call s:translate(a:arg)
     else
         let l:word = input('Enter the word: ')
         redraw!
-        call s:translate(l:word, 1, 0, 0, 0)
+        call s:translate(l:word)
     endif
 endfunction
+" 定义中文字符范围
+let chinese_ranges = [
+            \ [0x4e00, 0x9fa5],
+            \ [0x3400, 0x4dbf],
+            \ [0x20000, 0x2a6df],
+            \ [0x2a700, 0x2b73f],
+            \ [0x2b740, 0x2b81f],
+            \ [0x2b820, 0x2ceaf],
+            \ [0xf900, 0xfaff],
+            \ [0x2f800, 0x2fa1f]
+            \ ]
 
-function! s:input_translate_zh(arg)
-    if len(a:arg) > 0
-        call s:translate(a:arg, 1, 0, 0, 1)
-    else
-        let l:word = input('输入查询的中文: ')
-        redraw!
-        call s:translate(l:word, 1, 0, 0, 1)
-    endif
+" 定义一个函数来判断字符是否为中文
+function! IsChineseChar(code)
+    for range in g:chinese_ranges
+        if a:code >= range[0] && a:code <= range[1]
+            return 1
+        endif
+    endfor
+    return 0
+endfunction
+
+" 定义一个函数来判断字符串是否为中文
+function! IsChinese(str)
+    let chars = split(a:str, '\zs')
+    for char in chars
+        let code = char2nr(char)
+        if !IsChineseChar(code)
+            return 0
+        endif
+    endfor
+    return 1
+endfunction
+
+function! GetWord()
+    " 获取当前行内容
+    let line = getline('.')
+    " 获取光标所在列
+    let col = getpos('.')[2]
+    " 向左查找字符串起始位置
+    let start = col - 1
+    while start >= 1 && line[start - 1] =~ '[a-zA-Z]'
+        let start = start - 1
+    endwhile
+    " 向右查找字符串结束位置
+    let end = col - 1
+    while end < len(line) && line[end] =~ '[a-zA-Z]'
+        let end = end + 1
+    endwhile
+    " 提取字符串
+    let word = line[start:end - 1]
+    return word
 endfunction
 
 function! s:cursor_translate()
-    call s:translate(expand('<cword>'), 1, 0, 0, 0)
+    call s:translate(GetWord())
 endfunction
 
 function! s:visual_translate()
-    call s:translate(s:get_visual_select(), 0, 0, 0, 0)
+    call s:translate(s:get_visual_select())
 endfunction
 
 function! s:get_visual_select()
     try
         let l:a_save = @a
         silent! normal! gv"ay
-        if len(@a) > 0 && g:translator_outputype == 'echo'
+        if len(@a) > 0
             redraw!
         endif
         return @a
@@ -272,67 +210,8 @@ function! s:get_visual_select()
     endtry
 endfunction
 
-function! s:_enshrine_words(arg,...)
-    if len(a:arg) == 0
-        let l:word = expand('<cword>')
-    else
-        let l:word = a:arg
-    endif
-    if len(a:000) > 0
-        let l:word = s:get_visual_select()
-    endif
-    if len(l:word) > 1000
-        echo '待收藏词太长'
-        return
-    endif
-    call s:translate(l:word, 0, 1, 0, 0)
-endfunction
-
-function! s:enshrine_words(arg)
-    call s:_enshrine_words(a:arg)
-endfunction
-
-function! s:enshrine_wordsv()
-    call s:_enshrine_words('', 1)
-endfunction
-
-function! s:enshrine_edit()
-    if !filereadable(s:translator_enshrine_path)
-        echo '收藏文件找不到:('
-        return
-    endif
-    execute 'silent! tabnew! '.s:translator_enshrine_path
-    if len(s:translator_enshrine_comp_algo) > 0
-        execute '0,$ !'.s:translator_enshrine_comp_algo.' -d -c -q'
-    endif
-endfunction
-
-function! s:after_write_enshrine_file()
-    if len(s:translator_enshrine_comp_algo) > 0
-        call system('cat '.s:translator_enshrine_path.' | '.s:translator_enshrine_comp_algo.' --best -c > '.s:translator_enshrine_path.'.1')
-        call system('mv '.s:translator_enshrine_path.'.1 '.s:translator_enshrine_path)
-    endif
-    execute 'bd!'
-endfunction
-
-function! s:replace_translate()
-    let l:text = s:get_visual_select()
-    let reg_tmp = @a
-    let @a = s:translate(l:text, 0, 0, 1, 0)
-    silent! normal! gv"ap
-    let @a = reg_tmp
-endfunction
-
 command! -nargs=? Ti call <SID>input_translate(<q-args>)
-command! -nargs=? Ty call <SID>input_translate(<q-args>.@")
-command! -nargs=? Tz call <SID>input_translate_zh(<q-args>)
 command! Tc call <SID>cursor_translate()
 command! -range Tv call <SID>visual_translate()
-command! -range Tr call <SID>replace_translate()
-command! -nargs=? Te call <SID>enshrine_words(<q-args>)
-command! Tee call <SID>enshrine_edit()
-command! Tev call <SID>enshrine_wordsv()
-autocmd! BufWritePost *.tdata :call <SID>after_write_enshrine_file()
-autocmd! BufWritePre *.tdata set fileencoding=utf-8
 highlight TranslatorBorder ctermfg=37 guifg=#459d90 guibg=#202a31
 highlight TranslatorHi term=bold guifg=#898f9e guibg=#202a31
