@@ -45,6 +45,8 @@ function! s:create_popup(words, result)
                 \'highlight': 'TranslatorHi',
                 \'borderhighlight': ['TranslatorBorder'],
                 \'zindex': 100,
+                \'scrollbar': 1,
+                \'close' : 'click',
                 \}
     let l:result = []
     for x in split(a:result, "\n")
